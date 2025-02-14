@@ -1,0 +1,47 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "tawasul",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "tawasul (profile mode)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "tawasul (release mode)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        },
+
+        // the following lines are to launch my two devices with one click
+        {
+            "name": "galaxy note edge",
+            "request": "launch",
+            "type": "dart",
+            "deviceId": "4100d26fc8f5a1b5"
+        },
+        {
+            "name": "sharp sqous zero",
+            "request": "launch",
+            "type": "dart",
+            "deviceId": "357782090259930"
+        }
+    ],
+
+    // compounds helps to launch both configs in one click
+    "compounds": [
+        {
+            "name": "My Two Devices",
+            "configurations": ["galaxy note edge", "sharp sqous zero"]
+        }
+    ]
+}
