@@ -1,103 +1,90 @@
 import 'dart:async';
 import 'dart:developer';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:sdp_transform/sdp_transform.dart' as sdp_transform;
-import 'package:tawasul/core/websocket_service.dart';
+import 'package:tawasul/core/services/signaling/signaling_service.dart';
 
-class RTCProvider extends ChangeNotifier {
-  rtc.RTCVideoRenderer remoteRenderer = rtc.RTCVideoRenderer();
-  rtc.RTCVideoRenderer localRenderer = rtc.RTCVideoRenderer();
-
-  rtc.RTCPeerConnection? _peerConnection;
+class WebRTCService {
   rtc.MediaStream? _localStream;
+  rtc.RTCPeerConnection? _peerConnection;
 
   Completer _connectionCompleter = Completer();
   Completer _mediaGettingCompleter = Completer();
 
-  bool isCameraFacingFront = true;
-  bool isCameraOn = false;
-  bool isMicOn = false;
+  late Function(rtc.RTCTrackEvent trackEvent) onTrack;
+  late Function() onConnected;
+  late Function() onDisconnected;
 
-  bool isConnected = false;
+  late SignalingService _signalingService;
 
   static final Map<String, dynamic> _sdpConstraints = {
     "OfferToReceiveAudio": true,
     "OfferToReceiveVideo": true
   };
 
-  RTCProvider() {
-    WebSocketService.onNewParticipant = () async {
+  static final Map<String, dynamic> _iceConfiguration = {
+    "sdpSemantics": "unified-plan",
+    "iceServers": [
+      {"url": "stun:stun.l.google.com:19302"},
+      {"urls": "stun:openrelay.metered.ca:80"},
+      {
+        "urls": "turn:openrelay.metered.ca:80",
+        "username": "openrelayproject",
+        "credential": "openrelayproject",
+      },
+      {
+        "urls": "turn:openrelay.metered.ca:443",
+        "username": "openrelayproject",
+        "credential": "openrelayproject",
+      }
+    ]
+  };
+
+  WebRTCService(SignalingService signalingService) {
+    _signalingService = signalingService;
+
+    _signalingService.onNewParticipant = () async {
       Map offerSDP = await offer();
 
-      WebSocketService.postOfferSDP(offerSDP);
+      _signalingService.sendOfferSDP(offerSDP);
       log('posted offer');
     };
 
-    WebSocketService.onOfferSDP = (offerSDP) async {
+    _signalingService.onOfferSDP = (offerSDP) async {
       setRemoteSDP(offerSDP);
 
       Map answerSDP = await answer();
 
-      WebSocketService.postAnswerSDP(answerSDP);
+      _signalingService.sendAnswerSDP(answerSDP);
       log('posted answer');
     };
 
-    WebSocketService.onAnswerSDP = (answerSDP) {
+    _signalingService.onAnswerSDP = (answerSDP) {
       log('remote sdp arrived');
       setRemoteSDP(answerSDP);
     };
 
-    WebSocketService.onICE = (ice) {
+    _signalingService.onICE = (ice) {
       log('remote ice arrived');
       setICE(ice);
-    };
-
-    WebSocketService.onOtherParticipantDisconnected = () {
-      isConnected = false;
-      reCreateConnection();
     };
   }
 
   Future<void> createConnection() async {
-    Map<String, dynamic> iceConfiguration = {
-      "sdpSemantics": "unified-plan",
-      "iceServers": [
-        {"url": "stun:stun.l.google.com:19302"},
-        {"urls": "stun:openrelay.metered.ca:80"},
-        {
-          "urls": "turn:openrelay.metered.ca:80",
-          "username": "openrelayproject",
-          "credential": "openrelayproject",
-        },
-        {
-          "urls": "turn:openrelay.metered.ca:443",
-          "username": "openrelayproject",
-          "credential": "openrelayproject",
-        }
-      ]
-    };
-
-    _peerConnection = await rtc.createPeerConnection(iceConfiguration, _sdpConstraints);
-
-    remoteRenderer = rtc.RTCVideoRenderer();
-    await remoteRenderer.initialize();
+    _peerConnection = await rtc.createPeerConnection(_iceConfiguration, _sdpConstraints);
 
     _connectionCompleter.complete();
-    notifyListeners();
     log('connection created');
 
-    _peerConnection!.onTrack = (trackEvent) {
-      remoteRenderer.srcObject = trackEvent.streams[0];
-      isConnected = true;
-      notifyListeners();
+    initListeners();
+  }
 
-      log("Remote stream added (onTrack)");
-    };
+  void initListeners() {
+    _peerConnection!.onTrack = onTrack;
 
     _peerConnection!.onIceCandidate = (candidate) {
-      WebSocketService.postICE(
+      _signalingService.sendICE(
         {
           "candidate": candidate.candidate,
           "sdpMLineIndex": candidate.sdpMLineIndex,
@@ -116,13 +103,14 @@ class RTCProvider extends ChangeNotifier {
     await createConnection();
     await getMedia();
 
-    toggleCamera(isCameraOn);
-    toggleMic(isMicOn);
+    toggleCamera(false);
+    toggleMic(false);
   }
 
   Future<Map<String, dynamic>> offer() async {
     if (!_connectionCompleter.isCompleted) await _connectionCompleter.future;
     if (!_mediaGettingCompleter.isCompleted) await _mediaGettingCompleter.future;
+    // if there is connection and we got user media then procced to create offer
 
     rtc.RTCSessionDescription offerSDP = await _peerConnection!.createOffer(_sdpConstraints);
 
@@ -136,6 +124,7 @@ class RTCProvider extends ChangeNotifier {
   Future<Map<String, dynamic>> answer() async {
     if (!_connectionCompleter.isCompleted) await _connectionCompleter.future;
     if (!_mediaGettingCompleter.isCompleted) await _mediaGettingCompleter.future;
+    // if there is connection and we got user media then procced to create answer
 
     rtc.RTCSessionDescription answerSDP = await _peerConnection!.createAnswer(_sdpConstraints);
 
@@ -146,8 +135,9 @@ class RTCProvider extends ChangeNotifier {
     return sdp_transform.parse(answerSDP.sdp!);
   }
 
-  Future<void> setRemoteSDP(Map<String, dynamic> sdp) async {
+  Future<void> setRemoteSDP(Map sdp) async {
     if (!_connectionCompleter.isCompleted) await _connectionCompleter.future;
+    // if there is connection procced to set remote sdp
 
     String sdpString = sdp_transform.write(sdp['sdp'], null);
 
@@ -160,6 +150,7 @@ class RTCProvider extends ChangeNotifier {
 
   void setICE(Map ice) async {
     if (!_connectionCompleter.isCompleted) await _connectionCompleter.future;
+    // if there is connection procced to set remote ice
 
     rtc.RTCIceCandidate rtcCandidate = rtc.RTCIceCandidate(
       ice["candidate"],
@@ -173,17 +164,15 @@ class RTCProvider extends ChangeNotifier {
   Future<void> closeConnection() async {
     await _peerConnection!.close();
     await _peerConnection!.dispose();
-    await remoteRenderer.dispose();
-    await localRenderer.dispose();
     _connectionCompleter = Completer();
     _mediaGettingCompleter = Completer();
 
-    isConnected = false;
+    onDisconnected();
 
     log('connection closed');
   }
 
-  Future<void> getMedia() async {
+  Future<rtc.MediaStream> getMedia() async {
     Map<String, dynamic> mediaConstraints = {"audio": true, "video": true};
 
     _localStream = await rtc.navigator.mediaDevices.getUserMedia(mediaConstraints);
@@ -197,11 +186,7 @@ class RTCProvider extends ChangeNotifier {
 
     if (!_mediaGettingCompleter.isCompleted) _mediaGettingCompleter.complete();
 
-    localRenderer = rtc.RTCVideoRenderer();
-    await localRenderer.initialize();
-
-    localRenderer.srcObject = _localStream;
-    notifyListeners();
+    return _localStream!;
   }
 
   void toggleCamera(turnOn) {
@@ -228,8 +213,7 @@ class RTCProvider extends ChangeNotifier {
     _localStream?.dispose();
   }
 
-  //TODO: manage audio muting after resuming media
-  void resumeMedia() async {
+  Future<rtc.MediaStream> resumeMedia(bool isCameraFacingFront) async {
     String facingMode = isCameraFacingFront ? 'user' : 'environment';
 
     Map<String, dynamic> mediaConstraints = {
@@ -251,17 +235,10 @@ class RTCProvider extends ChangeNotifier {
         });
       });
 
-      localRenderer = rtc.RTCVideoRenderer();
-      await localRenderer.initialize();
-
-      toggleCamera(isCameraOn);
-      toggleMic(isMicOn);
-
-      localRenderer.srcObject = _localStream;
-      notifyListeners();
+      return _localStream!;
     } catch (error) {
       log(error.toString());
-      resumeMedia();
+      return resumeMedia(isCameraFacingFront);
     }
   }
 }

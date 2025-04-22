@@ -2,12 +2,14 @@ import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tawasul/core/di_container.dart';
+import 'package:tawasul/core/services/signaling/signaling_service.dart';
 import 'package:tawasul/core/utils.dart';
-import 'package:tawasul/features/home_page/presentation/domain/websocket_provider.dart';
+import 'package:tawasul/core/services/signaling/signaling_provider.dart';
+import 'package:tawasul/features/home_page/presentation/pages/no_connection_page.dart';
 import 'package:tawasul/features/home_page/presentation/widgets/server_mode_button.dart';
-import 'package:tawasul/features/video_call_page/domain/rtc_provider.dart';
+import 'package:tawasul/core/services/webrtc/webrtc_provider.dart';
 import 'package:tawasul/features/home_page/presentation/widgets/devider_widget.dart';
-import 'package:tawasul/core/websocket_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,13 +19,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late final RTCProvider rtcProvider;
-  late WebSocketProvider websocketProvider;
+  late final WebRTCProvider webRTCProvider;
+  late SignalingProvider signalingProvider;
 
   bool isJoiningRoom = false;
   bool isCreatingRoom = false;
 
   TextEditingController roomIdField = TextEditingController();
+
+  SignalingService signalingService = getIt<SignalingService>();
 
   bool isRoomIdValid(String roomId) {
     if (roomId.isEmpty && mounted) {
@@ -45,7 +49,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> handleJoinRoomButton(String roomId) async {
     if (!isRoomIdValid(roomId)) return;
 
-    WebSocketService.onJoinRoom = (response) async {
+    signalingService.onJoinRoom = (response) async {
       if (response['error'] != null) {
         setState(() {
           isJoiningRoom = false;
@@ -56,12 +60,9 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      await rtcProvider.createConnection();
-      await rtcProvider.getMedia();
-      rtcProvider.toggleCamera(false);
-      rtcProvider.toggleMic(false);
+      await webRTCProvider.createConnection();
 
-      WebSocketService.roomId = roomId;
+      signalingService.roomId = roomId;
 
       setState(() {
         isJoiningRoom = false;
@@ -74,11 +75,11 @@ class _HomePageState extends State<HomePage> {
       isJoiningRoom = true;
     });
 
-    WebSocketService.joinRoom(roomId);
+    signalingService.joinRoom(roomId);
   }
 
   void handleCreateRoomButton() {
-    WebSocketService.onCreateRoom = (response) async {
+    signalingService.onCreateRoom = (response) async {
       if (response['error'] != null) {
         setState(() {
           isCreatingRoom = false;
@@ -91,13 +92,10 @@ class _HomePageState extends State<HomePage> {
 
       String roomId = response['roomId'];
 
-      await rtcProvider.createConnection();
-      await rtcProvider.getMedia();
-      rtcProvider.toggleCamera(false);
-      rtcProvider.toggleMic(false);
+      await webRTCProvider.createConnection();
 
       roomIdField.text = "";
-      WebSocketService.roomId = response['roomId'];
+      signalingService.roomId = response['roomId'];
 
       setState(() {
         isCreatingRoom = false;
@@ -115,16 +113,16 @@ class _HomePageState extends State<HomePage> {
       isCreatingRoom = true;
     });
 
-    WebSocketService.createRoom();
+    signalingService.createRoom();
   }
 
   @override
   void initState() {
-    rtcProvider = Provider.of<RTCProvider>(context, listen: false);
+    webRTCProvider = Provider.of<WebRTCProvider>(context, listen: false);
 
     WidgetsBinding.instance.addPostFrameCallback(
       (timeStamp) {
-        Provider.of<WebSocketProvider>(context, listen: false).init();
+        Provider.of<SignalingProvider>(context, listen: false).init();
       },
     );
 
@@ -133,15 +131,15 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    WebSocketService.closeWebSocket();
+    signalingService.disconnect();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    websocketProvider = Provider.of<WebSocketProvider>(context);
+    signalingProvider = Provider.of<SignalingProvider>(context);
 
-    if (websocketProvider.isConnecting) {
+    if (signalingProvider.isConnecting) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -149,70 +147,17 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    if (!websocketProvider.isConnected) {
-      return Scaffold(
-        body: SafeArea(
-          child: Stack(
-            children: [
-              Align(
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: ElevatedButton(
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStateProperty.all(Colors.amberAccent),
-                    ),
-                    onPressed: () {
-                      websocketProvider.connect();
-                    },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          "Try refreshing the page",
-                          style: TextStyle(color: Colors.black),
-                        ),
-                        const SizedBox(width: 10),
-                        Icon(
-                          Icons.refresh_rounded,
-                          color: Colors.black,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.red, size: 60),
-                    Text(
-                      "Something went wrong! we couldn't connect to the server :(",
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        floatingActionButton: ServerModeButton(),
-      );
-    }
+    if (!signalingProvider.isConnected) return NoConnectionPage();
 
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Text("Tawasul"),
         centerTitle: true,
-        actions: [],
       ),
       body: Center(
         child: SingleChildScrollView(
           child: Column(
-            // mainAxisSize: MainAxisSize.max,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Padding(
@@ -232,7 +177,7 @@ class _HomePageState extends State<HomePage> {
                 child: SizedBox(
                   height: 40,
                   child: ElevatedButton(
-                    onPressed: isJoiningRoom || isCreatingRoom || !websocketProvider.isConnected
+                    onPressed: isJoiningRoom || isCreatingRoom || !signalingProvider.isConnected
                         ? null
                         : () => handleJoinRoomButton(roomIdField.text),
                     child: isJoiningRoom
@@ -250,7 +195,7 @@ class _HomePageState extends State<HomePage> {
                 child: SizedBox(
                   height: 40,
                   child: ElevatedButton(
-                    onPressed: isCreatingRoom || isJoiningRoom || !websocketProvider.isConnected
+                    onPressed: isCreatingRoom || isJoiningRoom || !signalingProvider.isConnected
                         ? null
                         : handleCreateRoomButton,
                     style: ButtonStyle(backgroundColor: WidgetStateProperty.all(Colors.grey)),

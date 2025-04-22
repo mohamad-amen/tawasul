@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tawasul/core/websocket_service.dart';
-import 'package:tawasul/features/video_call_page/domain/rtc_provider.dart';
+import 'package:tawasul/core/di_container.dart';
+import 'package:tawasul/core/services/signaling/signaling_service.dart';
+import 'package:tawasul/core/services/webrtc/webrtc_provider.dart';
 
 class CallControlButtons extends StatefulWidget {
   const CallControlButtons({super.key});
@@ -13,7 +14,7 @@ class CallControlButtons extends StatefulWidget {
 class _CallControlButtonsState extends State<CallControlButtons> {
   @override
   Widget build(BuildContext context) {
-    RTCProvider rtcProvider = Provider.of<RTCProvider>(context, listen: false);
+    WebRTCProvider webRTCProvider = Provider.of<WebRTCProvider>(context, listen: false);
 
     return Align(
       alignment: const Alignment(0, 0.95), // align to bottom center
@@ -23,12 +24,11 @@ class _CallControlButtonsState extends State<CallControlButtons> {
           FloatingActionButton(
             onPressed: () {
               setState(() {
-                rtcProvider.isMicOn = !rtcProvider.isMicOn;
-                rtcProvider.toggleMic(rtcProvider.isMicOn);
+                webRTCProvider.toggleMic(!webRTCProvider.isMicOn);
               });
             },
             heroTag: "Mic Button",
-            child: rtcProvider.isMicOn
+            child: webRTCProvider.isMicOn
                 ? const Icon(Icons.mic_rounded)
                 : const Icon(Icons.mic_off_rounded),
           ),
@@ -37,12 +37,13 @@ class _CallControlButtonsState extends State<CallControlButtons> {
           ),
           FloatingActionButton(
             onPressed: () async {
-              await rtcProvider.closeConnection();
-              WebSocketService.hangUp();
+              await webRTCProvider.closeConnection();
+              final SignalingService signalingService = getIt<SignalingService>();
+              signalingService.hangUp();
 
-              rtcProvider.isMicOn = false;
-              rtcProvider.isCameraOn = false;
-              rtcProvider.isCameraFacingFront = true;
+              webRTCProvider.isMicOn = false;
+              webRTCProvider.isCameraOn = false;
+              webRTCProvider.isCameraFacingFront = true;
 
               if (context.mounted) Navigator.pop(context);
             },
@@ -56,12 +57,11 @@ class _CallControlButtonsState extends State<CallControlButtons> {
           FloatingActionButton(
             onPressed: () {
               setState(() {
-                rtcProvider.isCameraOn = !rtcProvider.isCameraOn;
-                rtcProvider.toggleCamera(rtcProvider.isCameraOn);
+                webRTCProvider.toggleCamera(!webRTCProvider.isCameraOn);
               });
             },
             heroTag: "Camera Button",
-            child: rtcProvider.isCameraOn
+            child: webRTCProvider.isCameraOn
                 ? const Icon(Icons.videocam_rounded)
                 : const Icon(Icons.videocam_off_rounded),
           ),

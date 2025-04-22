@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:provider/provider.dart';
 import 'package:tawasul/core/constants.dart';
-import 'package:tawasul/features/video_call_page/domain/rtc_provider.dart';
+import 'package:tawasul/core/services/webrtc/webrtc_provider.dart';
 
 class LocalVideoView extends StatefulWidget {
   const LocalVideoView({super.key});
@@ -15,29 +15,29 @@ class LocalVideoView extends StatefulWidget {
 class _LocalVideoViewState extends State<LocalVideoView> {
   @override
   Widget build(BuildContext context) {
-    RTCProvider rtcProvider = Provider.of<RTCProvider>(context);
+    WebRTCProvider webRTCProvider = Provider.of<WebRTCProvider>(context);
 
-    double localVideoWidth = rtcProvider.isConnected
-        ? Constants.localVideoWidthWhenConnected
+    double localVideoWidth = webRTCProvider.isConnected
+        ? Sizes.localVideoWidthWhenConnected
         : MediaQuery.of(context).size.width;
 
-    double localVideoHeight = rtcProvider.isConnected
-        ? Constants.localVideoHeightWhenConnected
+    double localVideoHeight = webRTCProvider.isConnected
+        ? Sizes.localVideoHeightWhenConnected
         : MediaQuery.of(context).size.height;
 
-    double borderRadius = rtcProvider.isConnected ? 10 : 0;
+    double borderRadius = webRTCProvider.isConnected ? 10 : 0;
 
     return Align(
       alignment: Alignment.topLeft,
       child: SafeArea(
-        top: rtcProvider.isConnected,
+        top: webRTCProvider.isConnected,
         child: AnimatedContainer(
           width: localVideoWidth,
           height: localVideoHeight,
-          padding: EdgeInsets.all(rtcProvider.isConnected ? 8 : 0),
+          padding: EdgeInsets.all(webRTCProvider.isConnected ? 8 : 0),
           duration: const Duration(milliseconds: 500),
           child: Container(
-            decoration: rtcProvider.isConnected
+            decoration: webRTCProvider.isConnected
                 ? BoxDecoration(
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(borderRadius),
@@ -48,8 +48,8 @@ class _LocalVideoViewState extends State<LocalVideoView> {
               child: Stack(
                 children: [
                   RTCVideoView(
-                    rtcProvider.localRenderer,
-                    mirror: rtcProvider.isCameraFacingFront,
+                    webRTCProvider.localRenderer,
+                    mirror: webRTCProvider.isCameraFacingFront,
                     objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                   ),
                   SafeArea(
@@ -58,15 +58,17 @@ class _LocalVideoViewState extends State<LocalVideoView> {
                       child: Padding(
                         padding: const EdgeInsets.all(0),
                         child: Visibility(
-                          visible: (rtcProvider.localRenderer.srcObject == null ? false : true) &&
-                              !kIsWeb,
+                          visible:
+                              (webRTCProvider.localRenderer.srcObject == null ? false : true) &&
+                                  !kIsWeb,
                           child: IconButton(
                             onPressed: () async {
                               if (kIsWeb) return;
 
-                              await rtcProvider.switchCamera();
+                              await webRTCProvider.switchCamera();
                               setState(() {
-                                rtcProvider.isCameraFacingFront = !rtcProvider.isCameraFacingFront;
+                                webRTCProvider.isCameraFacingFront =
+                                    !webRTCProvider.isCameraFacingFront;
                               });
                             },
                             icon: Icon(

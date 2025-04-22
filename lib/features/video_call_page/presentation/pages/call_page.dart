@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:keep_screen_on/keep_screen_on.dart';
 import 'package:provider/provider.dart';
-import 'package:tawasul/features/video_call_page/domain/rtc_provider.dart';
+import 'package:tawasul/core/services/webrtc/webrtc_provider.dart';
 import 'package:tawasul/features/video_call_page/presentation/widgets/call_control_buttons.dart';
 import 'package:tawasul/features/video_call_page/presentation/widgets/roomid_widget.dart';
 import 'package:tawasul/features/video_call_page/presentation/widgets/local_video_view.dart';
@@ -18,7 +18,7 @@ class CallPage extends StatefulWidget {
 }
 
 class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
-  late RTCProvider rtcProvider;
+  late WebRTCProvider webRTCProvider;
 
   @override
   void initState() {
@@ -38,23 +38,23 @@ class _CallPageState extends State<CallPage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused) {
-      rtcProvider.stopMedia();
+      webRTCProvider.stopMedia();
       log("media stopped");
     } else if (state == AppLifecycleState.resumed && !kIsWeb) {
-      rtcProvider.resumeMedia();
+      webRTCProvider.resumeMedia();
       log("media resumed");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    rtcProvider = Provider.of<RTCProvider>(context);
+    webRTCProvider = Provider.of<WebRTCProvider>(context);
 
     return Scaffold(
       body: Stack(
         children: [
           RTCVideoView(
-            rtcProvider.remoteRenderer,
+            webRTCProvider.remoteRenderer,
             objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
           ),
           LocalVideoView(),

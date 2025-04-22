@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:tawasul/features/home_page/presentation/domain/websocket_provider.dart';
-import 'package:tawasul/features/video_call_page/domain/rtc_provider.dart';
+import 'package:tawasul/core/di_container.dart';
+import 'package:tawasul/core/services/signaling/signaling_provider.dart';
+import 'package:tawasul/core/services/webrtc/webrtc_provider.dart';
 import 'core/routing_controller.dart';
 import 'package:provider/provider.dart';
 
 void main() {
+  getItSetup();
   runApp(const MyApp());
 }
 
@@ -15,8 +17,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => RTCProvider()),
-        ChangeNotifierProvider(create: (context) => WebSocketProvider()),
+        ChangeNotifierProvider(create: (context) => WebRTCProvider()),
+        ChangeNotifierProvider(create: (context) => SignalingProvider()),
       ],
       child: const MaterialApp(
         title: 'Tawasul',
